@@ -6,6 +6,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from datetime import datetime
 from sqlalchemy import BigInteger
 from typing import Optional
+from fastapi import Request
 
 # Configuración de la base de datos
 DATABASE_URL = "postgresql://postgres:keni9614@localhost:5432/db_smartsecurity"
@@ -88,15 +89,17 @@ Base.metadata.create_all(bind=engine)
 # MODELOS Pydantic (Frontend)
 # ==========================
 
+from typing import Optional
+
 class PassengerBase(BaseModel):
-    passengerID: int
-    passengerFirstName: str
-    passengerLastName: str
+    passengerID: Optional[int] = None
+    passengerFirstName: Optional[str] = ''
+    passengerLastName: Optional[str] = ''
     passengerEmail: str
-    passengerDocumentID: int
-    passengerDocumentType: int
+    passengerDocumentID: Optional[int] = 0
+    passengerDocumentType: Optional[int] = 0
     passengerCellPhone: int
-    passengerCodeCellPhone: int
+    passengerCodeCellPhone: Optional[int] = 0
     passengerPassword: str
 
 class DriverCreate(BaseModel):
@@ -128,6 +131,10 @@ class TrustedContactSchema(BaseModel):
     trustedContactCodeCellPhone: int
     trustedContactCellPhone: int
     trustedContactEmail: str
+
+class LoginInput(BaseModel):
+    email: str
+    password: str
 
 # ============================  
 # RUTAS PASSENGER
@@ -182,6 +189,20 @@ def eliminar_passenger(passenger_id: int):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/passenger/search")
+def buscar_passenger_por_email_y_password(email: str, password: str):
+    db = SessionLocal()
+    try:
+        pasajero = db.query(Passenger).filter(
+            Passenger.passengerEmail == email,
+            Passenger.passengerPassword == password
+        ).first()
+        if pasajero:
+            return pasajero.__dict__
+        raise HTTPException(status_code=404, detail="Passenger not found")
     finally:
         db.close()
 
@@ -452,6 +473,37 @@ def buscar_contacto(query: str):
     finally:
         db.close()
 
+# ============================  
+# RUTAS LOGIN
+# ============================
+
+@app.post("/login/")
+def login_passenger(data: LoginInput):
+    db = SessionLocal()
+    try:
+        passenger = db.query(Passenger).filter(
+            Passenger.passengerEmail == data.email,
+            Passenger.passengerPassword == data.password
+        ).first()
+
+        if not passenger:
+            raise HTTPException(status_code=404, detail="Invalid email or password")
+
+        return {
+            "passengerID": passenger.passengerID,
+            "passengerfirstName": passenger.passengerFirstName,
+            "passengerlastname": passenger.passengerLastName,
+            "passengeremail": passenger.passengerEmail,
+            "passengerdocumentID": passenger.passengerDocumentID,
+            "passengerdocumentType": passenger.passengerDocumentType,
+            "passengercellPhone": passenger.passengerCellPhone,
+            "passengercodecellPhone": passenger.passengerCodeCellPhone,
+            "passengerpassword": passenger.passengerPassword,
+            "isActive": passenger.isActive,
+            "lastLogin": passenger.lastLogin
+        }
+    finally:
+        db.close()
 
 # Al final de main.py
 if __name__ == "__main__":
