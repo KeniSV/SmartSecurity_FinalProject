@@ -1,8 +1,11 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, TIMESTAMP, ForeignKey
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from datetime import datetime
+from sqlalchemy import BigInteger
+from typing import Optional
 
 # Configuración de la base de datos
 DATABASE_URL = "postgresql://postgres:keni9614@localhost:5432/db_smartsecurity"
@@ -13,62 +16,71 @@ Base = declarative_base()
 
 app = FastAPI()
 
+# 🔐 Habilitar CORS (antes de las rutas)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Cambia por ["http://localhost:3000"] si tu frontend está en otro puerto o dominio
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # ==========================
 # MODELOS DE BASE DE DATOS
 # ==========================
 
 class Passenger(Base):
     __tablename__ = "passenger"
-    passengerID = Column(Integer, primary_key=True, index=True)
-    passengerFirstName = Column(String(100))
-    passengerLastName = Column(String(100))
-    passengerEmail = Column(String(150))
-    passengerDocumentID = Column(Integer)
-    passengerDocumentType = Column(Integer)
-    passengerCellPhone = Column(Integer)
-    passengerCodeCellPhone = Column(Integer)
-    passengerPassword = Column(String(255))
+    passengerID = Column("passengerID",Integer, primary_key=True, index=True, autoincrement=True)
+    passengerFirstName = Column("passengerfirstName",String(100))
+    passengerLastName = Column("passengerlastname",String(100))
+    passengerEmail = Column("passengeremail",String(150))
+    passengerDocumentID = Column("passengerdocumentID",Integer)
+    passengerDocumentType = Column("passengerdocumentType",Integer)
+    passengerCellPhone = Column("passengercellPhone",Integer)
+    passengerCodeCellPhone = Column("passengercodecellPhone",Integer)
+    passengerPassword = Column("passengerpassword",String(255))
     isActive = Column(Boolean, default=True)
     lastLogin = Column(TIMESTAMP, default=datetime.utcnow)
 
 class Driver(Base):
     __tablename__ = "driver"
-    passengerID = Column(Integer, ForeignKey("passenger.passengerID"), primary_key=True)
-    drives = Column(Boolean, nullable=False)
-    licenseCategory = Column(String(50))
-    licenseNumber = Column(String(50))
-    hasCar = Column(Boolean, nullable=False)
-    licensePlate = Column(String(50))
+    passengerID = Column("passengerID",Integer, ForeignKey("passenger.passengerID"), primary_key=True)
+    drives = Column("drives",Boolean, nullable=False)
+    licenseCategory = Column("licenseCategory",String(50))
+    licenseNumber = Column("licenseNumber",String(50))
+    hasCar = Column("hasCar",Boolean, nullable=False)
+    licensePlate = Column("licensePlate",String(50))
 
     passenger = relationship("Passenger", backref="driver")
 
 class Email(Base):
     __tablename__ = "email"
-    emailID = Column(Integer, primary_key=True)
-    subjectEmail = Column(String(150))
-    descriptionEmail = Column(String)
-    passengerID = Column(Integer, ForeignKey("passenger.passengerID"))
-    isActive = Column(Boolean, default=True)
-    lastLogin = Column(TIMESTAMP, default=datetime.utcnow)
+    emailID = Column("emailID",Integer, primary_key=True, autoincrement=True)
+    subjectEmail = Column("subjectEmail",String(150))
+    descriptionEmail = Column("descriptionEmail",String)
+    passengerID = Column("passengerID",Integer, ForeignKey("passenger.passengerID"))
+    isActive = Column("isActive",Boolean, default=True)
+    lastLogin = Column("lastLogin",TIMESTAMP, default=datetime.utcnow)
 
 class Keyword(Base):
     __tablename__ = "keyword"
-    keywordID = Column(Integer, primary_key=True)
-    keywordName = Column(String(100))
+    keywordID = Column("keywordID",Integer, primary_key=True, autoincrement=True)
+    keywordName = Column("keywordName",String(100))
 
 class Place(Base):
     __tablename__ = "place"
-    placeID = Column(Integer, primary_key=True)
-    placeName = Column(String(100))
-    address = Column(String(200))
+    placeID = Column("placeID",Integer, primary_key=True, autoincrement=True)
+    placeName = Column("placeName",String(100))
+    address = Column("address",String(200))
 
 class TrustedContact(Base):
     __tablename__ = "trustedcontact"
-    trustedContactID = Column(Integer, primary_key=True)
-    trustedContactFullName = Column(String(100))
-    trustedContactCodeCellPhone = Column(Integer)
-    trustedContactCellPhone = Column(Integer)
-    trustedContactEmail = Column(String(150))
+    trustedContactID = Column("trustedcontactid",BigInteger, primary_key=True, autoincrement=True)
+    trustedContactFullName = Column("trustedcontactfullname",String(100))
+    trustedContactCodeCellPhone = Column("trustedcontactcodecellphone",Integer)
+    trustedContactCellPhone = Column("trustedcontactcellphone",Integer)
+    trustedContactEmail = Column("trustedcontactemail",String(150))
 
 Base.metadata.create_all(bind=engine)
 
@@ -111,7 +123,7 @@ class PlaceSchema(BaseModel):
     address: str
 
 class TrustedContactSchema(BaseModel):
-    trustedContactID: int
+    trustedContactID: Optional[int]=None
     trustedContactFullName: str
     trustedContactCodeCellPhone: int
     trustedContactCellPhone: int
