@@ -439,3 +439,9 @@ def buscar_contacto(query: str):
         return results
     finally:
         db.close()
+
+
+# Al final de main.py
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000)
