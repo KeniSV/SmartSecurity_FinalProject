@@ -1,12 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, TIMESTAMP, ForeignKey
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from datetime import datetime
 from sqlalchemy import BigInteger
 from typing import Optional
-from fastapi import Request
 
 # Configuración de la base de datos
 DATABASE_URL = "postgresql://postgres:keni9614@localhost:5432/db_smartsecurity"
@@ -17,10 +16,10 @@ Base = declarative_base()
 
 app = FastAPI()
 
-# 🔐 Habilitar CORS (antes de las rutas)
+# Habilitar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Cambia por ["http://localhost:3000"] si tu frontend está en otro puerto o dominio
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -32,56 +31,56 @@ app.add_middleware(
 
 class Passenger(Base):
     __tablename__ = "passenger"
-    passengerID = Column("passengerID",Integer, primary_key=True, index=True, autoincrement=True)
-    passengerFirstName = Column("passengerfirstName",String(100))
-    passengerLastName = Column("passengerlastname",String(100))
-    passengerEmail = Column("passengeremail",String(150))
-    passengerDocumentID = Column("passengerdocumentID",Integer)
-    passengerDocumentType = Column("passengerdocumentType",Integer)
-    passengerCellPhone = Column("passengercellPhone",Integer)
-    passengerCodeCellPhone = Column("passengercodecellPhone",Integer)
-    passengerPassword = Column("passengerpassword",String(255))
+    passengerID = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    passengerfirstName = Column(String(100))
+    passengerlastname = Column(String(100))
+    passengeremail = Column(String(150), unique=True)
+    passengerdocumentID = Column(Integer)
+    passengerdocumentType = Column(String(50))
+    passengercellPhone = Column(Integer)
+    passengercodecellPhone = Column(Integer)
+    passengerpassword = Column(String(255))
     isActive = Column(Boolean, default=True)
     lastLogin = Column(TIMESTAMP, default=datetime.utcnow)
 
 class Driver(Base):
     __tablename__ = "driver"
-    passengerID = Column("passengerID",Integer, ForeignKey("passenger.passengerID"), primary_key=True)
-    drives = Column("drives",Boolean, nullable=False)
-    licenseCategory = Column("licenseCategory",String(50))
-    licenseNumber = Column("licenseNumber",String(50))
-    hasCar = Column("hasCar",Boolean, nullable=False)
-    licensePlate = Column("licensePlate",String(50))
+    passengerID = Column(Integer, ForeignKey("passenger.passengerID"), primary_key=True)
+    drives = Column(Boolean, nullable=False)
+    licenseCategory = Column(String(50))
+    licenseNumber = Column(String(50))
+    hasCar = Column(Boolean, nullable=False)
+    licensePlate = Column(String(50))
 
     passenger = relationship("Passenger", backref="driver")
 
 class Email(Base):
     __tablename__ = "email"
-    emailID = Column("emailID",Integer, primary_key=True, autoincrement=True)
-    subjectEmail = Column("subjectEmail",String(150))
-    descriptionEmail = Column("descriptionEmail",String)
-    passengerID = Column("passengerID",Integer, ForeignKey("passenger.passengerID"))
-    isActive = Column("isActive",Boolean, default=True)
-    lastLogin = Column("lastLogin",TIMESTAMP, default=datetime.utcnow)
+    emailID = Column(BigInteger, primary_key=True, autoincrement=True)
+    subjectEmail = Column(String(150))
+    descriptionEmail = Column(String)
+    passengerID = Column(Integer, ForeignKey("passenger.passengerID"))
+    isActive = Column(Boolean, default=True)
+    lastLogin = Column(TIMESTAMP, default=datetime.utcnow)
 
 class Keyword(Base):
     __tablename__ = "keyword"
-    keywordID = Column("keywordID",Integer, primary_key=True, autoincrement=True)
-    keywordName = Column("keywordName",String(100))
+    keywordID = Column(Integer, primary_key=True, autoincrement=True)
+    keywordName = Column(String(100))
 
 class Place(Base):
     __tablename__ = "place"
-    placeID = Column("placeID",Integer, primary_key=True, autoincrement=True)
-    placeName = Column("placeName",String(100))
-    address = Column("address",String(200))
+    placeID = Column(Integer, primary_key=True, autoincrement=True)
+    placeName = Column(String(100))
+    address = Column(String(200))
 
 class TrustedContact(Base):
     __tablename__ = "trustedcontact"
-    trustedContactID = Column("trustedcontactid",BigInteger, primary_key=True, autoincrement=True)
-    trustedContactFullName = Column("trustedcontactfullname",String(100))
-    trustedContactCodeCellPhone = Column("trustedcontactcodecellphone",Integer)
-    trustedContactCellPhone = Column("trustedcontactcellphone",Integer)
-    trustedContactEmail = Column("trustedcontactemail",String(150))
+    trustedContactID = Column(BigInteger, primary_key=True, autoincrement=True)
+    trustedContactFullName = Column(String(100))
+    trustedContactCodeCellPhone = Column(Integer)
+    trustedContactCellPhone = Column(Integer)
+    trustedContactEmail = Column(String(150))
 
 Base.metadata.create_all(bind=engine)
 
@@ -93,14 +92,15 @@ from typing import Optional
 
 class PassengerBase(BaseModel):
     passengerID: Optional[int] = None
-    passengerFirstName: Optional[str] = ''
-    passengerLastName: Optional[str] = ''
-    passengerEmail: str
-    passengerDocumentID: Optional[int] = 0
-    passengerDocumentType: Optional[int] = 0
-    passengerCellPhone: int
-    passengerCodeCellPhone: Optional[int] = 0
-    passengerPassword: str
+    passengerfirstName: str
+    passengerlastname: str
+    passengeremail: str
+    passengerdocumentID: int
+    passengerdocumentType: Optional[str]=''
+    passengercellPhone: int
+    passengercodecellPhone: int
+    passengerpassword: str
+    isActive: Optional[bool] = True
 
 class DriverCreate(BaseModel):
     passenger: PassengerBase
@@ -144,9 +144,6 @@ class LoginInput(BaseModel):
 def crear_passenger(passenger: PassengerBase):
     db = SessionLocal()
     try:
-        existente = db.query(Passenger).filter(Passenger.passengerID == passenger.passengerID).first()
-        if existente:
-            raise HTTPException(status_code=400, detail="Passenger already exists")
         nuevo = Passenger(**passenger.dict())
         db.add(nuevo)
         db.commit()
@@ -166,7 +163,8 @@ def actualizar_passenger(passenger_id: int, data: PassengerBase):
             raise HTTPException(status_code=404, detail="Passenger not found")
 
         for attr, value in data.dict().items():
-            setattr(pasajero, attr, value)
+            if attr != "passengerID":  # ❗ No actualizar la clave primaria
+                setattr(pasajero, attr, value)
 
         db.commit()
         return {"message": "Passenger updated successfully"}
@@ -482,8 +480,8 @@ def login_passenger(data: LoginInput):
     db = SessionLocal()
     try:
         passenger = db.query(Passenger).filter(
-            Passenger.passengerEmail == data.email,
-            Passenger.passengerPassword == data.password
+            Passenger.passengeremail == data.email,
+            Passenger.passengerpassword == data.password
         ).first()
 
         if not passenger:
@@ -491,14 +489,14 @@ def login_passenger(data: LoginInput):
 
         return {
             "passengerID": passenger.passengerID,
-            "passengerfirstName": passenger.passengerFirstName,
-            "passengerlastname": passenger.passengerLastName,
-            "passengeremail": passenger.passengerEmail,
-            "passengerdocumentID": passenger.passengerDocumentID,
-            "passengerdocumentType": passenger.passengerDocumentType,
-            "passengercellPhone": passenger.passengerCellPhone,
-            "passengercodecellPhone": passenger.passengerCodeCellPhone,
-            "passengerpassword": passenger.passengerPassword,
+            "passengerfirstName": passenger.passengerfirstName,  # minúscula f
+            "passengerlastname": passenger.passengerlastname,
+            "passengeremail": passenger.passengeremail,
+            "passengerdocumentID": passenger.passengerdocumentID,
+            "passengerdocumentType": passenger.passengerdocumentType,
+            "passengercellPhone": passenger.passengercellPhone,
+            "passengercodecellPhone": passenger.passengercodecellPhone,
+            "passengerpassword": passenger.passengerpassword,
             "isActive": passenger.isActive,
             "lastLogin": passenger.lastLogin
         }
