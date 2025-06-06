@@ -1,22 +1,25 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, TIMESTAMP, ForeignKey
+from pydantic import BaseModel
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, TIMESTAMP, ForeignKey, BigInteger
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from datetime import datetime
-from sqlalchemy import BigInteger
 from typing import Optional
+import whisper
+import os
+import uuid
 
-# Configuración de la base de datos
+# ============================
+# CONFIGURACIÓN GENERAL
+# ============================
+
 DATABASE_URL = "postgresql://postgres:keni9614@localhost:5432/db_smartsecurity"
-
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
 
 app = FastAPI()
 
-# Habilitar CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -117,7 +120,7 @@ class EmailCreate(BaseModel):
     passengerID: int
 
 class KeywordSchema(BaseModel):
-    keywordID: int
+    keywordID: Optional[int]=None
     keywordName: str
 
 class PlaceSchema(BaseModel):
@@ -288,19 +291,30 @@ def actualizar_driver(driver_id: int, driver_data: DriverCreate):
 def eliminar_driver(driver_id: int):
     db = SessionLocal()
     try:
+        # Verificar existencia
         driver = db.query(Driver).filter(Driver.passengerID == driver_id).first()
         passenger = db.query(Passenger).filter(Passenger.passengerID == driver_id).first()
 
-        if not driver or not passenger:
+        if not driver:
             raise HTTPException(status_code=404, detail="Driver not found")
+        if not passenger:
+            raise HTTPException(status_code=404, detail="Passenger not found")
 
+        # Eliminar emails asociados al pasajero (si existen)
+        db.query(Email).filter(Email.passengerID == passenger.passengerID).delete()
+
+        # Eliminar contactos de confianza (si aplican)
+        db.query(TrustedContact).filter(TrustedContact.trustedContactCellPhone == passenger.passengercellPhone).delete()
+
+        # Eliminar driver y luego passenger
         db.delete(driver)
         db.delete(passenger)
         db.commit()
+
         return {"message": "Driver deleted successfully"}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error al eliminar driver: {str(e)}")
     finally:
         db.close()
 
@@ -503,7 +517,37 @@ def login_passenger(data: LoginInput):
     finally:
         db.close()
 
-# Al final de main.py
+# ============================
+# TRANSCRIPCIÓN CON WHISPER
+# ============================
+
+model = whisper.load_model("base")  # Puedes cambiar a tiny, small, etc.
+
+@app.post("/transcribe/")
+async def transcribe_audio(file: UploadFile = File(...)):
+    temp_filename = f"temp_{uuid.uuid4()}.wav"
+    with open(temp_filename, "wb") as buffer:
+        buffer.write(await file.read())
+
+    try:
+        result = model.transcribe(
+            temp_filename,
+            language="es",
+            verbose=False,
+            temperature=0.0
+        )
+        return {"text": result["text"]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al transcribir: {str(e)}")
+    finally:
+        if os.path.exists(temp_filename):
+            os.remove(temp_filename)
+
+# ============================
+# INICIO DEL SERVIDOR
+# ============================
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
