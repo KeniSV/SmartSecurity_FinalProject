@@ -124,7 +124,7 @@ class KeywordSchema(BaseModel):
     keywordName: str
 
 class PlaceSchema(BaseModel):
-    placeID: int
+    placeID: Optional[int]=None 
     placeName: str
     address: str
 
@@ -397,7 +397,10 @@ def actualizar_keyword(keyword_id: int, keyword: KeywordSchema):
 def crear_place(place: PlaceSchema):
     db = SessionLocal()
     try:
-        nuevo = Place(**place.dict())
+        nuevo = Place(
+            placeName=place.placeName,
+            address=place.address
+        )
         db.add(nuevo)
         db.commit()
         return {"message": "Place created"}
