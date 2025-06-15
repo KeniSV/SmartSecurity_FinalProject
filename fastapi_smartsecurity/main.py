@@ -45,6 +45,11 @@ class Passenger(Base):
     passengerpassword = Column(String(255))
     isActive = Column(Boolean, default=True)
     lastLogin = Column(TIMESTAMP, default=datetime.utcnow)
+    drives = Column(Boolean, default=False)
+    licenseCategory = Column(String(50), default='')
+    licenseNumber = Column(String(50), default='')
+    hasCar = Column(Boolean, default=False)
+    licensePlate = Column(String(50), default='')
 
 class Driver(Base):
     __tablename__ = "driver"
@@ -99,11 +104,16 @@ class PassengerBase(BaseModel):
     passengerlastname: str
     passengeremail: str
     passengerdocumentID: int
-    passengerdocumentType: Optional[str]=''
+    passengerdocumentType: Optional[str] = ''
     passengercellPhone: int
     passengercodecellPhone: int
     passengerpassword: str
     isActive: Optional[bool] = True
+    drives: Optional[bool] = False
+    licenseCategory: Optional[str] = ''
+    licenseNumber: Optional[str] = ''
+    hasCar: Optional[bool] = False
+    licensePlate: Optional[str] = ''
 
 class DriverCreate(BaseModel):
     passenger: PassengerBase
@@ -166,7 +176,7 @@ def actualizar_passenger(passenger_id: int, data: PassengerBase):
             raise HTTPException(status_code=404, detail="Passenger not found")
 
         for attr, value in data.dict().items():
-            if attr != "passengerID":  # ❗ No actualizar la clave primaria
+            if attr != "passengerID":
                 setattr(pasajero, attr, value)
 
         db.commit()
@@ -184,9 +194,20 @@ def eliminar_passenger(passenger_id: int):
         pasajero = db.query(Passenger).filter(Passenger.passengerID == passenger_id).first()
         if not pasajero:
             raise HTTPException(status_code=404, detail="Passenger not found")
+
+        # 🧹 Borrar contactos de confianza por teléfono del pasajero
+        db.query(TrustedContact).filter(
+            TrustedContact.trustedContactCellPhone == pasajero.passengercellPhone
+        ).delete()
+
+        # 🧹 Borrar ubicaciones si tienen una relación (si Place tiene un passengerID, por ejemplo)
+        db.query(Place).filter(Place.passengerID == passenger_id).delete()
+
+        # 🗑️ Borrar pasajero
         db.delete(pasajero)
         db.commit()
-        return {"message": "Passenger deleted successfully"}
+
+        return {"message": "Passenger and related data deleted successfully"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
@@ -198,8 +219,8 @@ def buscar_passenger_por_email_y_password(email: str, password: str):
     db = SessionLocal()
     try:
         pasajero = db.query(Passenger).filter(
-            Passenger.passengerEmail == email,
-            Passenger.passengerPassword == password
+            Passenger.passengeremail == email,
+            Passenger.passengerpassword == password
         ).first()
         if pasajero:
             return pasajero.__dict__
@@ -215,28 +236,19 @@ def buscar_passenger_por_email_y_password(email: str, password: str):
 def crear_driver(driver_data: DriverCreate):
     db = SessionLocal()
     try:
-        # Verifica si ya existe el passenger
-        existing = db.query(Passenger).filter(Passenger.passengerID == driver_data.passenger.passengerID).first()
-        if existing:
-            raise HTTPException(status_code=400, detail="Passenger already exists")
+        # Usar el passenger ya existente
+        passenger = db.query(Passenger).filter(Passenger.passengerID == driver_data.passenger.passengerID).first()
+        if not passenger:
+            raise HTTPException(status_code=404, detail="Passenger not found")
 
-        # Crear Passenger
-        passenger = Passenger(
-            passengerID=driver_data.passenger.passengerID,
-            passengerFirstName=driver_data.passenger.passengerFirstName,
-            passengerLastName=driver_data.passenger.passengerLastName,
-            passengerEmail=driver_data.passenger.passengerEmail,
-            passengerDocumentID=driver_data.passenger.passengerDocumentID,
-            passengerDocumentType=driver_data.passenger.passengerDocumentType,
-            passengerCellPhone=driver_data.passenger.passengerCellPhone,
-            passengerCodeCellPhone=driver_data.passenger.passengerCodeCellPhone,
-            passengerPassword=driver_data.passenger.passengerPassword
-        )
-        db.add(passenger)
+        # Verificar si el driver ya existe
+        existing_driver = db.query(Driver).filter(Driver.passengerID == driver_data.passenger.passengerID).first()
+        if existing_driver:
+            raise HTTPException(status_code=400, detail="Driver already exists")
 
-        # Crear Driver
+        # Crear Driver únicamente
         driver = Driver(
-            passengerID=driver_data.passenger.passengerID,
+            passengerID=passenger.passengerID,
             drives=driver_data.drives,
             licenseCategory=driver_data.licenseCategory,
             licenseNumber=driver_data.licenseNumber,
@@ -315,6 +327,17 @@ def eliminar_driver(driver_id: int):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error al eliminar driver: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/driver/{driver_id}")
+def obtener_driver(driver_id: int):
+    db = SessionLocal()
+    try:
+        driver = db.query(Driver).filter(Driver.passengerID == driver_id).first()
+        if not driver:
+            raise HTTPException(status_code=404, detail="Driver not found")
+        return {"message": "Driver exists"}
     finally:
         db.close()
 
@@ -539,6 +562,7 @@ async def transcribe_audio(file: UploadFile = File(...)):
             verbose=False,
             temperature=0.0
         )
+        print("🔊 TRANSCRIPCIÓN:", result["text"])  # ✅ AGREGA ESTO
         return {"text": result["text"]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al transcribir: {str(e)}")
