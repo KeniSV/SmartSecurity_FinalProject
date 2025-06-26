@@ -543,7 +543,7 @@ def login_passenger(data: LoginInput):
 
         return {
             "passengerID": passenger.passengerID,
-            "passengerfirstName": passenger.passengerfirstName,  # minúscula f
+            "passengerfirstName": passenger.passengerfirstName,
             "passengerlastname": passenger.passengerlastname,
             "passengeremail": passenger.passengeremail,
             "passengerdocumentID": passenger.passengerdocumentID,
@@ -552,7 +552,12 @@ def login_passenger(data: LoginInput):
             "passengercodecellPhone": passenger.passengercodecellPhone,
             "passengerpassword": passenger.passengerpassword,
             "isActive": passenger.isActive,
-            "lastLogin": passenger.lastLogin
+            "lastLogin": passenger.lastLogin,
+            "drives": passenger.drives,
+            "licenseCategory": passenger.licenseCategory,
+            "licenseNumber": passenger.licenseNumber,
+            "hasCar": passenger.hasCar,
+            "licensePlate": passenger.licensePlate
         }
     finally:
         db.close()
